@@ -19,9 +19,7 @@ def make_xml_request(xml_payload):
         return None
 
 
-def push_to_ru(data):
-    property_data = data
-
+def push_to_ru(formatted_string):
     xml_payload_1 = f"""
                     <Push_PutAvbUnits_RQ>
                     <Authentication>
@@ -30,32 +28,25 @@ def push_to_ru(data):
                     </Authentication>"""
 
     xml_payload_2 = f"""</Push_PutAvbUnits_RQ>"""
-    xml_payload = xml_payload_1 + data + xml_payload_2
+    xml_payload = xml_payload_1 + formatted_string + xml_payload_2
+
     print("--------xml_payload---------", xml_payload)
     # Call the function to make the XML request
-    # response = make_xml_request(xml_payload)
+    response = make_xml_request(xml_payload)
+    print("--------response---------", response)
+    # Parse the XML response
+    responseContent = ET.fromstring(response)
 
-    # # Parse the XML response
-    # responseContent = ET.fromstring(response)
+    # Extract the relevant information
+    status_text = responseContent.find('Status').text
+    status_id = responseContent.find('Status').attrib['ID']
+    response_id = responseContent.find('ResponseID').text
 
-    # # Extract the relevant information
-    # status_text = responseContent.find('Status').text
-    # status_id = responseContent.find('Status').attrib['ID']
-    # response_id = responseContent.find('ResponseID').text
-    # ru_property_id = responseContent.find('ID').text
-    # # Create a list item and append the extracted values when status_id is 0
-    # item_ru_response = {
-    #     'status': status_text,
-    #     'status_id': status_id,
-    #     'response_id': response_id
-    # }
-    # if status_id == '0':
-    #     item_ru_response['property_id'] = ru_property_id
+    item_ru_response = {
+        'status': status_text,
+        'status_id': status_id,
+        'response_id': response_id
+    }
+    # Return the list item
+    return item_ru_response
 
-    # # Return the list item
-    # return item_ru_response
-
-    # Process the response if needed
-    # print(status_text, status_id, response_id, ru_property_id)
-    # Return the extracted values
-    # return status_text, status_id, response_id, property_id

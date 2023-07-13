@@ -1,10 +1,8 @@
-from push_avb_units.avb_utils import get_properties_monday
+from push_avb_units.avb_utils import get_available_units_monday
 
 
 def main():
-    print("------yes---------")
-    api_respose = get_properties_monday()
-
+    api_respose = get_available_units_monday()
     return api_respose
 
 
