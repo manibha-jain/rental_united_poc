@@ -1,5 +1,5 @@
 from sync_rental_to_monday.monday_service import get_board_columns, get_group_id, hit_monday_api
-from sync_rental_to_monday.sync_rental_united import pull_list_of_properties_from_ru
+from sync_rental_to_monday.sync_rental_united import pull_list_of_properties_from_ru, pull_min_stay_details_from_ru
 import json
 import os
 
@@ -66,7 +66,6 @@ def sync_rental_to_monday():
             columns['Account Number']: property.get('AccountNo', 000000000),
 
         })
-
             variables = {
             'board_id': int(os.getenv('PROPERTIES_BOARD_ID')),
             'columnVals': col_vals,
@@ -76,6 +75,51 @@ def sync_rental_to_monday():
 
             print('Process of saving values in monday.com started>>>>>>>>>>')
             hit_monday_api(query, variables)
+            # update available units.
+            update_avb_units(data_dict)
+            # break
             print('Process of saving values in monday.com ended>>>>>>>>>>')
     except Exception as e:
         print(e)
+
+
+def update_avb_units(data_dict):
+    try:
+        min_stay_data = pull_min_stay_details_from_ru(data_dict.get('property_id'))
+        list_of_property_min_stay = min_stay_data.get('Pull_ListPropertyMinStay_RS')
+        property_min_stay = list_of_property_min_stay.get('PropertyMinStay')
+        min_stay_detials = property_min_stay.get('MinStay')
+
+        if min_stay_detials is not None:
+            date_from = min_stay_detials.get('@DateFrom')
+            date_to = min_stay_detials.get('@DateTo')
+            min_stay = min_stay_detials.get('#text')
+            columns = get_board_columns(int(os.getenv('AVB_UNITS_BOARD_ID')))
+            query = 'mutation ($myItemName: String!, $columnVals: JSON!,$board_id:Int!,$group_id: String!) { create_item (board_id:$board_id,group_id:$group_id, item_name:$myItemName, column_values:$columnVals,create_labels_if_missing:true) { id } }'
+            group = get_group_id(int(os.getenv('AVB_UNITS_BOARD_ID')))
+            list_of_details = data_dict.get('Pull_ListSpecProp_RS')
+            property = list_of_details.get('Property')
+
+            print("-------------", [data_dict.get('property_id')])
+            col_vals = json.dumps({
+                columns['Name']: property.get('Name'),
+                columns['Date From']: date_from,
+                columns['Date To']: date_to,
+                columns['Number of Units']: property.get('NoOfUnits'),
+                columns['Minimum stay length']: min_stay,
+                columns['Changeover type ID']: 4,
+                # columns['Property IDs']: {"ids":[1]}
+                columns['Property IDs']: {"labels":[data_dict.get('property_id')]}
+                })
+            variables = {
+                'board_id': int(os.getenv('AVB_UNITS_BOARD_ID')),
+                'columnVals': col_vals,
+                'group_id': group[0].get('id'),
+                'myItemName': property.get('Name')
+                }
+            print('Process of saving avb_units in monday.com started>>>>>>>>>>')
+            hit_monday_api(query, variables)
+            print('Process of saving avb_units in monday.com ended>>>>>>>>>>')
+
+    except Exception as e:
+        print("error in update_avb_units::::", e)

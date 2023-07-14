@@ -67,6 +67,23 @@ def get_list_of_property_details(property_id):
     data_dict = xmltodict.parse(response)
     return data_dict
 
+def pull_min_stay_details_from_ru(property_id):
+    xml_payload = f"""
+                        <Pull_ListPropertyMinStay_RQ>
+                            <Authentication>
+                                <UserName>{os.getenv('RU_USERNAME')}</UserName>
+                                <Password>{os.getenv('RU_PASSWORD')}</Password>
+                            </Authentication>
+                            <PropertyID>{property_id}</PropertyID>
+                            <DateFrom>2023-07-01</DateFrom>
+                            <DateTo>2023-08-30</DateTo>
+                        </Pull_ListPropertyMinStay_RQ>
+                    """
+    # Call the function to make the XML request
+    response = make_xml_request(xml_payload)
+    data_dict = xmltodict.parse(response)
+    return data_dict
+
 
 
 
