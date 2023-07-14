@@ -1,7 +1,9 @@
 from sync_rental_to_monday.monday_service import get_board_columns, get_group_id, hit_monday_api
-from sync_rental_to_monday.sync_rental_united import pull_list_of_properties_from_ru
+from sync_rental_to_monday.sync_rental_united import pull_list_of_properties_from_ru, pull_prices_of_property_from_ru
 import json
 import os
+from datetime import date
+from dateutil.relativedelta import relativedelta
 
 def sync_rental_to_monday():
     try:
@@ -33,6 +35,8 @@ def sync_rental_to_monday():
 
             query = 'mutation ($myItemName: String!, $columnVals: JSON!,$board_id:Int!,$group_id: String!) { create_item (board_id:$board_id,group_id:$group_id, item_name:$myItemName, column_values:$columnVals,create_labels_if_missing:true) { id } }'
             group = get_group_id(int(os.getenv('PROPERTIES_BOARD_ID')))
+
+            print('name..........', property.get('Name'))
 
             col_vals = json.dumps({
             # columns['rentals_united_id']: int(rental_united_id,
@@ -74,8 +78,83 @@ def sync_rental_to_monday():
             'myItemName': property.get('Name')
             }
 
-            print('Process of saving values in monday.com started>>>>>>>>>>')
+            print('Process of saving values in property board of monday.com started>>>>>>>>>>')
             hit_monday_api(query, variables)
-            print('Process of saving values in monday.com ended>>>>>>>>>>')
+            print('Process of saving values in property board of monday.com ended>>>>>>>>>>')
+
+            print('Process of saving prices in prices board of monday.com started>>>>>>>>>>')
+            update_prices(data_dict.get('property_id'), property.get('Name'))
+            print('Process of saving prices in prices board of monday.com ended>>>>>>>>>>')
+
     except Exception as e:
         print(e)
+
+def get_date_range():
+    """
+    Find date range to get prices of property.
+
+    Returns:
+        string: today date
+        string: date after 1 year
+    """
+    today = date.today()
+    future_date = today + relativedelta(years=1)
+    return str(today), str(future_date)
+
+def update_prices(property_id, property_name):
+    """
+    Update prices of single property in monday.com with single/multiple seasons.
+
+    Args:
+          property_id: The id of the property
+    """
+
+    date_from, date_to = get_date_range()
+    prices_data_dicts = pull_prices_of_property_from_ru(property_id, date_from, date_to)
+
+    pull_list = prices_data_dicts.get('Pull_ListPropertyPrices_RS')
+    prices = pull_list.get('Prices')
+    seasons = prices.get('Season')
+    if seasons == None:
+        return True
+
+    if seasons is not None and type(seasons) != list:
+        reflect_price_changes(seasons, property_id, property_name)
+    else:
+        for season in seasons:
+            reflect_price_changes(season, property_id, property_name)
+
+def reflect_price_changes(season, property_id, property_name):
+
+    """
+    reflect price changes of single seaosn in monday.com.
+
+    Args:
+          property_id: The id of the property
+    """
+    season_date_from = season.get('@DateFrom')
+    season_date_to = season.get('@DateTo')
+    season_price = season.get('Price')
+    season_extra = season.get('Extra')
+
+    columns = get_board_columns(int(os.getenv('PRICES_BOARD_ID')))
+    query = 'mutation ($myItemName: String!, $columnVals: JSON!,$board_id:Int!,$group_id: String!) { create_item (board_id:$board_id,group_id:$group_id, item_name:$myItemName, column_values:$columnVals,create_labels_if_missing:true) { id } }'
+    group = get_group_id(int(os.getenv('PRICES_BOARD_ID')))
+
+    col_vals = json.dumps({
+    # columns['rentals_united_id']: int(rental_united_id,
+    columns['Property Id']: property_id,
+    columns['Date From']: season_date_from,
+    columns['Date To']: season_date_to,
+    columns['Price']: season_price,
+    columns['Extra']: season_extra
+    })
+
+    variables = {
+    'board_id': int(os.getenv('PRICES_BOARD_ID')),
+    'columnVals': col_vals,
+    'group_id': group[0].get('id'),
+    'myItemName': property_name
+    }
+    hit_monday_api(query, variables)
+

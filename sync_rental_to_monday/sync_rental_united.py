@@ -41,15 +41,34 @@ def pull_list_of_properties_from_ru():
     pull_list = data_dict.get('Pull_ListOwnerProp_RS')
     properties = pull_list.get('Properties')
     property_list = properties.get('Property')
-    print('length...', len(property_list))
+
     for property in property_list:
         ids = property.get('ID')
         property_id = ids.get('#text')
         data_dict = get_list_of_property_details(property_id)
         data_dict['property_id'] = property_id
         data_dicts.append(data_dict)
-        # break
+
     return data_dicts
+
+def pull_prices_of_property_from_ru(property_id, date_from, date_to):
+    print('property_id...........', property_id)
+
+    xml_payload = f"""
+                    <Pull_ListPropertyPrices_RQ>
+                <Authentication>
+                    <UserName>{os.getenv('RU_USERNAME')}</UserName>
+                    <Password>{os.getenv('RU_PASSWORD')}</Password>
+                </Authentication>
+                <PropertyID>{property_id}</PropertyID>
+                <DateFrom>{date_from}</DateFrom>
+                <DateTo>{date_to}</DateTo>
+            </Pull_ListPropertyPrices_RQ>
+                """
+    # Call the function to make the XML request
+    response = make_xml_request(xml_payload)
+    data_dict = xmltodict.parse(response)
+    return data_dict
 
 def get_list_of_property_details(property_id):
     xml_payload = f"""
