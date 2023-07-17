@@ -1,4 +1,4 @@
-from sync_rental_to_monday.monday_service import get_board_columns, get_group_id, hit_monday_api
+from sync_rental_to_monday.monday_service import get_board_columns, get_group_id, hit_monday_api, get_composition_rooms_details
 from sync_rental_to_monday.sync_rental_united import pull_list_of_properties_from_ru, pull_min_stay_details_from_ru
 import json
 import os
@@ -77,6 +77,8 @@ def sync_rental_to_monday():
             hit_monday_api(query, variables)
             # update available units.
             update_avb_units(data_dict)
+            # update composition rooms.
+            update_composition_rooms(data_dict)
             # break
             print('Process of saving values in monday.com ended>>>>>>>>>>')
     except Exception as e:
@@ -100,7 +102,6 @@ def update_avb_units(data_dict):
             list_of_details = data_dict.get('Pull_ListSpecProp_RS')
             property = list_of_details.get('Property')
 
-            print("-------------", [data_dict.get('property_id')])
             col_vals = json.dumps({
                 columns['Name']: property.get('Name'),
                 columns['Date From']: date_from,
@@ -108,7 +109,6 @@ def update_avb_units(data_dict):
                 columns['Number of Units']: property.get('NoOfUnits'),
                 columns['Minimum stay length']: min_stay,
                 columns['Changeover type ID']: 4,
-                # columns['Property IDs']: {"ids":[1]}
                 columns['Property IDs']: {"labels":[data_dict.get('property_id')]}
                 })
             variables = {
@@ -123,3 +123,47 @@ def update_avb_units(data_dict):
 
     except Exception as e:
         print("error in update_avb_units::::", e)
+
+def update_composition_rooms(data_dict):
+    try:
+        composition_room_ids = []
+        list_of_details = data_dict.get('Pull_ListSpecProp_RS')
+        property = list_of_details.get('Property')
+        composition_rooms_amenties = property.get('CompositionRoomsAmenities')
+        if composition_rooms_amenties is not None and composition_rooms_amenties != '':
+            composition_room_details = composition_rooms_amenties.get('CompositionRoomAmenities')
+            if type(composition_room_details) == dict:
+                if composition_room_details.get('@CompositionRoomID') not in composition_room_ids:
+                    composition_room_ids.append(composition_room_details.get('@CompositionRoomID'))
+            else:
+                for single_composition_room in composition_room_details:
+                    if single_composition_room.get('@CompositionRoomID') not in composition_room_ids:
+                        composition_room_ids.append(single_composition_room.get('@CompositionRoomID'))
+        print("-----------composition_room_ids-------", composition_room_ids)
+        print("----------property_id----------", data_dict.get('property_id'))
+        composition_room_values = get_composition_rooms_details()
+
+        for composition_room_id in composition_room_ids:
+            for single_comp_room_value in composition_room_values:
+                updated_value = ''
+                if int(composition_room_id) == int(single_comp_room_value.get('comp_room_id')):
+                    if single_comp_room_value.get('property_id') is None or single_comp_room_value.get('property_id') == '':
+                        updated_value = data_dict.get('property_id')
+                    else:
+                        previous_value = single_comp_room_value.get('property_id')
+                        if str(data_dict.get('property_id')) not in str(previous_value):
+                            updated_value = str(previous_value) + ', ' +str(data_dict.get('property_id'))
+                    if updated_value != '':
+
+                        query = 'mutation ($columnVals: String!,$board_id:Int!,$item_id:Int!) { change_simple_column_value (item_id:$item_id,board_id:$board_id,column_id:"text",value:$columnVals) { id } }'
+                        variables = {
+                            'board_id': int(os.getenv('COMP_ROOMS_BOARD_ID')),
+                            'columnVals': updated_value,
+                            'item_id': int(single_comp_room_value.get('como_item_id'))
+                            }
+                        print('Process of saving composition_rooms in monday.com started>>>>>>>>>>')
+                        hit_monday_api(query, variables)
+                        print('Process of saving composition_rooms in monday.com ended>>>>>>>>>>')
+                        break
+    except Exception as e:
+            print("error in update_composition_rooms::::", e)

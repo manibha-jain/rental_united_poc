@@ -1,8 +1,6 @@
-import xml.etree.ElementTree as ET
 import requests
 import os
 import xmltodict
-import json
 from dotenv import load_dotenv
 load_dotenv()
 
