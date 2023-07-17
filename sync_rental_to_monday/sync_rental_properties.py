@@ -1,4 +1,4 @@
-from sync_rental_to_monday.monday_service import get_board_columns, get_group_id, hit_monday_api
+from sync_rental_to_monday.monday_service import get_all_group_items_of_a_single_board, get_board_columns, get_group_id, hit_monday_api
 from sync_rental_to_monday.sync_rental_united import pull_list_of_properties_from_ru, pull_prices_of_property_from_ru
 import json
 import os
@@ -80,11 +80,17 @@ def sync_rental_to_monday():
 
             print('Process of saving values in property board of monday.com started>>>>>>>>>>')
             hit_monday_api(query, variables)
-            print('Process of saving values in property board of monday.com ended>>>>>>>>>>')
 
             print('Process of saving prices in prices board of monday.com started>>>>>>>>>>')
             update_prices(data_dict.get('property_id'), property.get('Name'))
             print('Process of saving prices in prices board of monday.com ended>>>>>>>>>>')
+
+            print('Process of saving amenities in amenities board of monday.com started>>>>>>>>>>')
+            list_of_amenities_of_property = property.get('Amenities')
+            update_amenities(data_dict.get('property_id'), list_of_amenities_of_property)
+            print('Process of saving amenities in amenities board of monday.com ended>>>>>>>>>>')
+
+        print('Process of saving values in property board of monday.com ended>>>>>>>>>>')
 
     except Exception as e:
         print(e)
@@ -157,4 +163,61 @@ def reflect_price_changes(season, property_id, property_name):
     'myItemName': property_name
     }
     hit_monday_api(query, variables)
+
+def update_amenities(property_id, list_of_amenities_of_property):
+    if list_of_amenities_of_property is not None:
+        amenities = list_of_amenities_of_property.get('Amenity')
+        if amenities is None:
+            return True
+        elif type(amenities) != list:
+            amenity = amenities.get('"#text"')
+            reflect_amenities_change(property_id, amenity)
+        else:
+            for amenitie in amenities:
+                amenity = amenitie.get('#text')
+                reflect_amenities_change(property_id, amenity)
+
+def reflect_amenities_change(property_id, rental_amenity_id):
+    column_id = 'text2'
+
+    items_list = get_all_group_items_of_a_single_board(int(os.getenv('AMENITIES_BOARD_ID')))
+    items = items_list[0].get('items')
+    for item in items:
+        f_property_id = ''
+        previous_property_ids, amenity_id = get_previous_property_ids(item)
+        if int(rental_amenity_id) == int(amenity_id):
+            if previous_property_ids is None or previous_property_ids == '':
+                f_property_id = str(property_id)
+            elif ',' not in previous_property_ids and str(previous_property_ids) != str(property_id):
+                f_property_id = str(previous_property_ids+', '+property_id)
+            elif ',' not in previous_property_ids and str(previous_property_ids) == str(property_id):
+                f_property_id = ''
+            elif ',' in previous_property_ids and str(property_id) not in str(previous_property_ids):
+                f_property_id = str(previous_property_ids)+', '+str(property_id)
+            elif ',' in previous_property_ids and str(property_id) in str(previous_property_ids):
+                f_property_id = ''
+
+            if f_property_id != '':
+                print('id matched...............................', int(rental_amenity_id), amenity_id)
+
+                # assign property_ids in column
+                query = 'mutation ($board_id:Int!,$item_id:Int!,$column_id:String!,$value:String!) {change_simple_column_value (board_id:$board_id,item_id:$item_id,column_id:$column_id,value:$value,create_labels_if_missing:true) { id } }'
+
+                variables = {
+                'board_id': int(os.getenv('AMENITIES_BOARD_ID')),
+                'item_id': int(item.get('id')),
+                'column_id': str(column_id),
+                'value': str(f_property_id)
+                }
+                hit_monday_api(query, variables)
+
+def get_previous_property_ids(item):
+    column_values = item.get('column_values')
+    for column_value in column_values:
+        if column_value.get('title') == 'Property Id':
+            property_ids = column_value.get('text')
+        if column_value.get('title') == 'Amenity ID':
+            amenity_id = column_value.get('text')
+    return property_ids, amenity_id
+
 

@@ -113,3 +113,20 @@ def get_group_id(board_id):
     except Exception as e:
         print(f"error in get_group_id")
         return None
+
+def get_all_group_items_of_a_single_board(property_board_id):
+    query = "query($board_id: Int!) {boards(ids:[$board_id]){groups(ids:[]){items {id name column_values {title value text}}}}}"
+    variables = {
+        'board_id': int(property_board_id),
+    }
+    payload = {'query': query, 'variables': variables}
+
+    response = requests.post(
+            os.getenv('MONDAY_API_ENDPOINT'), json=payload, headers=_build_headers())
+
+    if response.status_code == 200 and 'errors' not in response.json():
+       data = response.json()
+       return data['data']['boards'][0]['groups']
+    else:
+        print(
+            f"unable to get_all_group_items_of_a_single_board {response.json()}")
