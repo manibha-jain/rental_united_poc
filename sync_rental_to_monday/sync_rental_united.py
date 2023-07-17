@@ -86,6 +86,24 @@ def get_list_of_property_details(property_id):
     data_dict = xmltodict.parse(response)
     return data_dict
 
+def pull_list_of_calendar_days(property_id, date_from, date_to):
+    xml_payload = f"""
+                    <Pull_ListPropertyAvailabilityCalendar_RQ>
+                    <Authentication>
+                        <UserName>{os.getenv('RU_USERNAME')}</UserName>
+                        <Password>{os.getenv('RU_PASSWORD')}</Password>
+                    </Authentication>
+                    <PropertyID>{property_id}</PropertyID>
+                    <DateFrom>{date_from}</DateFrom>
+                    <DateTo>{date_to}</DateTo>
+                    </Pull_ListPropertyAvailabilityCalendar_RQ>
+                """
+
+    # Call the function to make the XML request
+    response = make_xml_request(xml_payload)
+    data_dict = xmltodict.parse(response)
+    return data_dict
+
 
 
 
