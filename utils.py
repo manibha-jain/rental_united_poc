@@ -80,7 +80,6 @@ def get_properties_monday():
 
     for item in property_items:
         try:
-            print('item..............', item)
             # Name, ID, Property ID, Property Information etc..
 
             # Get Columns Values
@@ -174,7 +173,6 @@ def get_properties_monday():
             # print(update_monday_record)
 
             responses_data.append(update_ru_response)
-            break
 
         except Exception as e:
             print(e)
