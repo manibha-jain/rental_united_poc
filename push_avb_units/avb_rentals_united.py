@@ -30,10 +30,8 @@ def push_to_ru(formatted_string):
     xml_payload_2 = f"""</Push_PutAvbUnits_RQ>"""
     xml_payload = xml_payload_1 + formatted_string + xml_payload_2
 
-    print("--------xml_payload---------", xml_payload)
     # Call the function to make the XML request
     response = make_xml_request(xml_payload)
-    print("--------response---------", response)
     # Parse the XML response
     responseContent = ET.fromstring(response)
 
