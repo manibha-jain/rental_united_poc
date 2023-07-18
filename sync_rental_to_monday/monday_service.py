@@ -1,5 +1,9 @@
 import requests
 import os
+from queries import parse_item_data, items_pagination, paginated_subitems_query, get_item_subitem_query
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def _build_headers():
     """
@@ -114,6 +118,26 @@ def get_group_id(board_id):
         print(f"error in get_group_id")
         return None
 
+def get_composition_rooms_details():
+    """
+        Ths function returns composition rooms details.
+    """
+    try:
+        filtered_comp_room_id = []
+        composition_rooms = parse_item_data(paginated_subitems_query(
+            get_item_subitem_query(os.getenv('COMP_ROOMS_BOARD_ID')), items_pagination))
+
+        for comp_room_item in composition_rooms:
+            filtered_comp_room_id.append({
+                'como_item_id': comp_room_item.get('id'),
+                'comp_room_id': comp_room_item['column_values'][1]['text'],
+                'property_id': comp_room_item['column_values'][3]['text']
+            })
+
+        return filtered_comp_room_id
+    except Exception as e:
+        print("error in get_composition_rooms_details::::", e)
+
 def get_all_group_items_of_a_single_board(property_board_id):
     query = "query($board_id: Int!) {boards(ids:[$board_id]){groups(ids:[]){items {id name column_values {title value text}}}}}"
     variables = {
@@ -130,3 +154,4 @@ def get_all_group_items_of_a_single_board(property_board_id):
     else:
         print(
             f"unable to get_all_group_items_of_a_single_board {response.json()}")
+

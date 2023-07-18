@@ -1,8 +1,6 @@
-import xml.etree.ElementTree as ET
 import requests
 import os
 import xmltodict
-import json
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -86,6 +84,7 @@ def get_list_of_property_details(property_id):
     data_dict = xmltodict.parse(response)
     return data_dict
 
+
 def pull_list_of_calendar_days(property_id, date_from, date_to):
     xml_payload = f"""
                     <Pull_ListPropertyAvailabilityCalendar_RQ>
@@ -98,7 +97,23 @@ def pull_list_of_calendar_days(property_id, date_from, date_to):
                     <DateTo>{date_to}</DateTo>
                     </Pull_ListPropertyAvailabilityCalendar_RQ>
                 """
+    # Call the function to make the XML request
+    response = make_xml_request(xml_payload)
+    data_dict = xmltodict.parse(response)
+    return data_dict
 
+def pull_min_stay_details_from_ru(property_id):
+    xml_payload = f"""
+                        <Pull_ListPropertyMinStay_RQ>
+                            <Authentication>
+                                <UserName>{os.getenv('RU_USERNAME')}</UserName>
+                                <Password>{os.getenv('RU_PASSWORD')}</Password>
+                            </Authentication>
+                            <PropertyID>{property_id}</PropertyID>
+                            <DateFrom>2023-07-01</DateFrom>
+                            <DateTo>2023-08-30</DateTo>
+                        </Pull_ListPropertyMinStay_RQ>
+                    """
     # Call the function to make the XML request
     response = make_xml_request(xml_payload)
     data_dict = xmltodict.parse(response)
