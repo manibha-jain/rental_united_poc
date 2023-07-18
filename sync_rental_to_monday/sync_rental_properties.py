@@ -1,5 +1,5 @@
 from sync_rental_to_monday.monday_service import get_board_columns, get_group_id, hit_monday_api, get_composition_rooms_details,get_all_group_items_of_a_single_board
-from sync_rental_to_monday.sync_rental_united import pull_list_of_properties_from_ru, pull_min_stay_details_from_ru,pull_prices_of_property_from_ru
+from sync_rental_to_monday.sync_rental_united import pull_list_of_calendar_days, pull_list_of_properties_from_ru, pull_min_stay_details_from_ru,pull_prices_of_property_from_ru
 import json
 import os
 from datetime import date
@@ -36,7 +36,7 @@ def sync_rental_to_monday():
             query = 'mutation ($myItemName: String!, $columnVals: JSON!,$board_id:Int!,$group_id: String!) { create_item (board_id:$board_id,group_id:$group_id, item_name:$myItemName, column_values:$columnVals,create_labels_if_missing:true) { id } }'
             group = get_group_id(int(os.getenv('PROPERTIES_BOARD_ID')))
 
-            print('name..........', property.get('Name'))
+            print('Property_name..........', property.get('Name'))
 
             col_vals = json.dumps({
             # columns['rentals_united_id']: int(rental_united_id,
@@ -79,20 +79,29 @@ def sync_rental_to_monday():
 
             print('Process of saving values in property board of monday.com started>>>>>>>>>>')
             hit_monday_api(query, variables)
+
             # update available units.
+            print('Process of saving avb_units in monday.com started>>>>>>>>>>')
             update_avb_units(data_dict)
+            print('Process of saving avb_units in monday.com ended>>>>>>>>>>')
+
             # update composition rooms.
+            print('Process of saving composition_rooms in monday.com started>>>>>>>>>>')
             update_composition_rooms(data_dict)
+            print('Process of saving composition_rooms in monday.com ended>>>>>>>>>>')
             # break
-            
+
+            # update prices of property.
             print('Process of saving prices in prices board of monday.com started>>>>>>>>>>')
             update_prices(data_dict.get('property_id'), property.get('Name'))
             print('Process of saving prices in prices board of monday.com ended>>>>>>>>>>')
 
+            # update available calendar days of property.
             print('Process of saving calendar availabilty in calendar board of monday.com started>>>>>>>>>>')
             update_calendar_days(data_dict.get('property_id'))
             print('Process of saving calendar availabilty in calendar board of monday.com ended>>>>>>>>>>')
 
+            # update amenities of property.
             print('Process of saving amenities in amenities board of monday.com started>>>>>>>>>>')
             list_of_amenities_of_property = property.get('Amenities')
             update_amenities(data_dict.get('property_id'), list_of_amenities_of_property)
@@ -135,9 +144,8 @@ def update_avb_units(data_dict):
                 'group_id': group[0].get('id'),
                 'myItemName': property.get('Name')
                 }
-            print('Process of saving avb_units in monday.com started>>>>>>>>>>')
+
             hit_monday_api(query, variables)
-            print('Process of saving avb_units in monday.com ended>>>>>>>>>>')
 
     except Exception as e:
         print("error in update_avb_units::::", e)
@@ -158,7 +166,6 @@ def update_composition_rooms(data_dict):
                     if single_composition_room.get('@CompositionRoomID') not in composition_room_ids:
                         composition_room_ids.append(single_composition_room.get('@CompositionRoomID'))
         print("-----------composition_room_ids-------", composition_room_ids)
-        print("----------property_id----------", data_dict.get('property_id'))
         composition_room_values = get_composition_rooms_details()
 
         for composition_room_id in composition_room_ids:
@@ -179,14 +186,12 @@ def update_composition_rooms(data_dict):
                             'columnVals': updated_value,
                             'item_id': int(single_comp_room_value.get('como_item_id'))
                             }
-                        print('Process of saving composition_rooms in monday.com started>>>>>>>>>>')
                         hit_monday_api(query, variables)
-                        print('Process of saving composition_rooms in monday.com ended>>>>>>>>>>')
                         break
     except Exception as e:
             print("error in update_composition_rooms::::", e)
 
-        
+
 def get_date_range():
     """
     Find date range to get prices of property.
@@ -284,6 +289,7 @@ def update_amenities(property_id, list_of_amenities_of_property):
                 for amenitie in amenities:
                     amenity = amenitie.get('#text')
                     reflect_amenities_change(property_id, amenity)
+
     except Exception as e:
         print('error in function update_amenities', e)
 
@@ -309,17 +315,15 @@ def reflect_amenities_change(property_id, rental_amenity_id):
             if int(rental_amenity_id) == int(amenity_id):
                 if previous_property_ids is None or previous_property_ids == '':
                     f_property_id = str(property_id)
-                elif ',' not in previous_property_ids and str(previous_property_ids) != str(property_id):
-                    f_property_id = str(previous_property_ids+', '+property_id)
                 elif ',' not in previous_property_ids and str(previous_property_ids) == str(property_id):
                     f_property_id = ''
-                elif ',' in previous_property_ids and str(property_id) not in str(previous_property_ids):
+                elif (',' in previous_property_ids and str(property_id) not in str(previous_property_ids)) or (',' not in previous_property_ids and str(previous_property_ids) != str(property_id)):
                     f_property_id = str(previous_property_ids)+', '+str(property_id)
                 elif ',' in previous_property_ids and str(property_id) in str(previous_property_ids):
                     f_property_id = ''
 
                 if f_property_id != '':
-                    print('id matched...............................', int(rental_amenity_id), amenity_id)
+                    print('amenity id matched...............................', amenity_id)
 
                     # assign property_ids in column
                     query = 'mutation ($board_id:Int!,$item_id:Int!,$column_id:String!,$value:String!) {change_simple_column_value (board_id:$board_id,item_id:$item_id,column_id:$column_id,value:$value,create_labels_if_missing:true) { id } }'
@@ -331,6 +335,7 @@ def reflect_amenities_change(property_id, rental_amenity_id):
                     'value': str(f_property_id)
                     }
                     hit_monday_api(query, variables)
+                    break
 
     except Exception as e:
         print('error in function reflect_amenities_change', e)
@@ -410,11 +415,9 @@ def reflect_changes_in_calendar_board(item_id, property_id, previous_property_id
 
         if previous_property_ids is None or previous_property_ids == '':
             f_property_id = str(property_id)
-        elif ',' not in previous_property_ids and str(previous_property_ids) != str(property_id):
-            f_property_id = str(previous_property_ids+', '+property_id)
         elif ',' not in previous_property_ids and str(previous_property_ids) == str(property_id):
             f_property_id = ''
-        elif ',' in previous_property_ids and str(property_id) not in str(previous_property_ids):
+        elif (',' in previous_property_ids and str(property_id) not in str(previous_property_ids)) or (',' not in previous_property_ids and str(previous_property_ids) != str(property_id)):
             f_property_id = str(previous_property_ids)+', '+str(property_id)
         elif ',' in previous_property_ids and str(property_id) in str(previous_property_ids):
             f_property_id = ''
