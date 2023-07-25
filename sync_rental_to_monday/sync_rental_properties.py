@@ -1,7 +1,8 @@
 from sync_rental_to_monday.monday_service import get_board_columns, get_group_id, hit_monday_api, get_composition_rooms_details,get_all_group_items_of_a_single_board
-from sync_rental_to_monday.sync_rental_united import pull_list_of_calendar_days, pull_list_of_properties_from_ru, pull_min_stay_details_from_ru,pull_prices_of_property_from_ru
+from sync_rental_to_monday.sync_rental_united import pull_availability_calendar_details_from_ru, pull_list_of_properties_from_ru,pull_prices_of_property_from_ru
 import json
 import os
+import datetime
 from datetime import date
 from dateutil.relativedelta import relativedelta
 
@@ -9,6 +10,7 @@ def sync_rental_to_monday():
     try:
         # get property_details from rental_united
         data_dicts = pull_list_of_properties_from_ru()
+
         for data_dict in data_dicts:
 
             # fetch values.
@@ -36,7 +38,7 @@ def sync_rental_to_monday():
             query = 'mutation ($myItemName: String!, $columnVals: JSON!,$board_id:Int!,$group_id: String!) { create_item (board_id:$board_id,group_id:$group_id, item_name:$myItemName, column_values:$columnVals,create_labels_if_missing:true) { id } }'
             group = get_group_id(int(os.getenv('PROPERTIES_BOARD_ID')))
 
-            print('Property_name..........', property.get('Name'))
+            print('---------------Property_name---------------', property.get('Name'))
 
             col_vals = json.dumps({
             # columns['rentals_united_id']: int(rental_united_id,
@@ -77,75 +79,121 @@ def sync_rental_to_monday():
             'myItemName': property.get('Name')
             }
 
-            print('Process of saving values in property board of monday.com started>>>>>>>>>>')
-            hit_monday_api(query, variables)
+            print('Process of saving values in property board of monday.com started>>>>>>>>>>\n')
+            all_property_ids = get_previous_property_ids()
+            if data_dict.get('property_id') not in all_property_ids:
+                hit_monday_api(query, variables)
 
-            # update available units.
-            print('Process of saving avb_units in monday.com started>>>>>>>>>>')
-            update_avb_units(data_dict)
-            print('Process of saving avb_units in monday.com ended>>>>>>>>>>')
+            # update prices of property.
+            print('Process of saving prices in prices board of monday.com started>>>>>>>>>>')
+            all_property_data = get_previous_ids_and_dates(int(os.getenv('PRICES_BOARD_ID')), 'Property Id')
+            update_prices(data_dict.get('property_id'), property.get('Name'), all_property_data)
+            print('Process of saving prices in prices board of monday.com ended>>>>>>>>>>\n')
+
+            # update available units, calendar availabilty.
+            print('Process of saving avb_units, calendar in monday.com started>>>>>>>>>>')
+            all_units_and_calendar_data = get_previous_ids_and_dates(int(os.getenv('AVB_UNITS_BOARD_ID')), 'Property IDs')
+            add_avb_calendar_and_units(data_dict.get('property_id'), all_units_and_calendar_data, property.get('Name'))
+            print('Process of saving avb_units, calendar in monday.com ended>>>>>>>>>>\n')
 
             # update composition rooms.
             print('Process of saving composition_rooms in monday.com started>>>>>>>>>>')
             update_composition_rooms(data_dict)
-            print('Process of saving composition_rooms in monday.com ended>>>>>>>>>>')
-            # break
-
-            # update prices of property.
-            print('Process of saving prices in prices board of monday.com started>>>>>>>>>>')
-            update_prices(data_dict.get('property_id'), property.get('Name'))
-            print('Process of saving prices in prices board of monday.com ended>>>>>>>>>>')
-
-            # update available calendar days of property.
-            print('Process of saving calendar availabilty in calendar board of monday.com started>>>>>>>>>>')
-            update_calendar_days(data_dict.get('property_id'))
-            print('Process of saving calendar availabilty in calendar board of monday.com ended>>>>>>>>>>')
+            print('Process of saving composition_rooms in monday.com ended>>>>>>>>>>\n')
 
             # update amenities of property.
             print('Process of saving amenities in amenities board of monday.com started>>>>>>>>>>')
             list_of_amenities_of_property = property.get('Amenities')
             update_amenities(data_dict.get('property_id'), list_of_amenities_of_property)
-            print('Process of saving amenities in amenities board of monday.com ended>>>>>>>>>>')
+            print('Process of saving amenities in amenities board of monday.com ended>>>>>>>>>>\n')
 
         print('Process of saving values in property board of monday.com ended>>>>>>>>>>')
     except Exception as e:
         print('error in function sync_rental_to_monday', e)
 
 
-def update_avb_units(data_dict):
+def add_avb_calendar_and_units(property_id, all_monday_available_data, property_name):
     try:
-        min_stay_data = pull_min_stay_details_from_ru(data_dict.get('property_id'))
-        list_of_property_min_stay = min_stay_data.get('Pull_ListPropertyMinStay_RS')
-        property_min_stay = list_of_property_min_stay.get('PropertyMinStay')
-        min_stay_detials = property_min_stay.get('MinStay')
 
-        if min_stay_detials is not None:
-            date_from = min_stay_detials.get('@DateFrom')
-            date_to = min_stay_detials.get('@DateTo')
-            min_stay = min_stay_detials.get('#text')
-            columns = get_board_columns(int(os.getenv('AVB_UNITS_BOARD_ID')))
-            query = 'mutation ($myItemName: String!, $columnVals: JSON!,$board_id:Int!,$group_id: String!) { create_item (board_id:$board_id,group_id:$group_id, item_name:$myItemName, column_values:$columnVals,create_labels_if_missing:true) { id } }'
-            group = get_group_id(int(os.getenv('AVB_UNITS_BOARD_ID')))
-            list_of_details = data_dict.get('Pull_ListSpecProp_RS')
-            property = list_of_details.get('Property')
+        date_ranges = []
+        current_start_date = None
+        calendar_from = '2023-08-31'
+        calendar_to = '2023-11-01'
 
-            col_vals = json.dumps({
-                columns['Name']: property.get('Name'),
-                columns['Date From']: date_from,
-                columns['Date To']: date_to,
-                columns['Number of Units']: property.get('NoOfUnits'),
-                columns['Minimum stay length']: min_stay,
-                columns['Changeover type ID']: 4,
-                columns['Property IDs']: {"labels":[data_dict.get('property_id')]}
-                })
-            variables = {
-                'board_id': int(os.getenv('AVB_UNITS_BOARD_ID')),
-                'columnVals': col_vals,
-                'group_id': group[0].get('id'),
-                'myItemName': property.get('Name')
-                }
+        availability_data = pull_availability_calendar_details_from_ru(property_id, calendar_from, calendar_to)
+        list_availability_data = availability_data.get('Pull_ListPropertyAvailabilityCalendar_RS')
+        property_calendar = list_availability_data.get('PropertyCalendar')
+        caldays = property_calendar.get('CalDay')
 
-            hit_monday_api(query, variables)
+        if caldays is None:
+            return True
+
+        date_ranges = []
+        current_start_date = None
+        min_stay = None
+        changeover = None
+
+        for entry in caldays:
+            date_str = entry["@Date"]
+            is_blocked = entry["IsBlocked"] == "false"
+            min_stay = entry["MinStay"]
+            changeover = entry["Changeover"]
+            avb_units = entry["@Units"]
+
+            date_obj = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+
+            if is_blocked:
+                if not current_start_date:
+                    current_start_date = date_obj
+            else:
+                if current_start_date:
+                    date_ranges.append({
+                        "start_date": current_start_date.strftime('%Y-%m-%d'),
+                        "end_date": (date_obj - datetime.timedelta(days=1)).strftime('%Y-%m-%d'),
+                        "min_stay": min_stay,
+                        "changeover": changeover,
+                        "avb_units": avb_units
+                    })
+                    current_start_date = None
+
+        # Add the last range if the last date is unblocked
+        if current_start_date:
+            date_ranges.append({
+                "start_date": current_start_date.strftime('%Y-%m-%d'),
+                "end_date": date_obj.strftime('%Y-%m-%d'),
+                "min_stay": min_stay,
+                "changeover": changeover,
+                "avb_units": avb_units
+            })
+
+        for date_range in date_ranges:
+            current_tuple = (date_range.get('start_date'), date_range.get('end_date'), property_id)
+
+            # if condition to avoid inserting duplicates.
+            if current_tuple not in all_monday_available_data and date_range != []:
+
+                columns = get_board_columns(int(os.getenv('AVB_UNITS_BOARD_ID')))
+                query = 'mutation ($myItemName: String!, $columnVals: JSON!,$board_id:Int!,$group_id: String!) { create_item (board_id:$board_id,group_id:$group_id, item_name:$myItemName, column_values:$columnVals,create_labels_if_missing:true) { id } }'
+                group = get_group_id(int(os.getenv('AVB_UNITS_BOARD_ID')))
+
+                col_vals = json.dumps({
+                    columns['Name']: property_name,
+                    columns['Date From']: date_range.get('start_date'),
+                    columns['Date To']: date_range.get('end_date'),
+                    columns['Number of Units']: date_range.get('avb_units'),
+                    columns['Minimum stay length']: date_range.get('min_stay'),
+                    columns['Changeover type ID']: date_range.get('changeover'),
+                    columns['Availability']: "Yes",
+                    columns['Property IDs']: {"labels":[property_id]}
+                    })
+                variables = {
+                    'board_id': int(os.getenv('AVB_UNITS_BOARD_ID')),
+                    'columnVals': col_vals,
+                    'group_id': group[0].get('id'),
+                    'myItemName': property_name
+                    }
+
+                hit_monday_api(query, variables)
 
     except Exception as e:
         print("error in update_avb_units::::", e)
@@ -198,25 +246,28 @@ def get_date_range():
 
     Returns:
         string: today date
-        string: date after 1 year
+        string: date after 6 months
     """
     try:
         today = date.today()
-        future_date = today + relativedelta(years=1)
+        future_date = today + relativedelta(months=6)
         return str(today), str(future_date)
     except Exception as e:
         print('error in function get_date_range', e)
 
-def update_prices(property_id, property_name):
+def update_prices(property_id, property_name, all_property_datas):
     """
     Update prices of single property in monday.com with single/multiple seasons.
 
     Args:
           property_id: The id of the property
+          property_name: The name of the property
+          all_property_data: The data of the property
     """
 
     try:
         date_from, date_to = get_date_range()
+
         prices_data_dicts = pull_prices_of_property_from_ru(property_id, date_from, date_to)
 
         pull_list = prices_data_dicts.get('Pull_ListPropertyPrices_RS')
@@ -226,14 +277,14 @@ def update_prices(property_id, property_name):
             return True
 
         if seasons is not None and type(seasons) != list:
-            reflect_price_changes(seasons, property_id, property_name)
+            reflect_price_changes(seasons, property_id, property_name, all_property_datas)
         else:
             for season in seasons:
-                reflect_price_changes(season, property_id, property_name)
+                reflect_price_changes(season, property_id, property_name, all_property_datas)
     except Exception as e:
         print('error in function update_prices', e)
 
-def reflect_price_changes(season, property_id, property_name):
+def reflect_price_changes(season, property_id, property_name, all_property_datas):
 
     """
     reflect price changes of single seaosn in monday.com.
@@ -247,26 +298,31 @@ def reflect_price_changes(season, property_id, property_name):
         season_price = season.get('Price')
         season_extra = season.get('Extra')
 
-        columns = get_board_columns(int(os.getenv('PRICES_BOARD_ID')))
-        query = 'mutation ($myItemName: String!, $columnVals: JSON!,$board_id:Int!,$group_id: String!) { create_item (board_id:$board_id,group_id:$group_id, item_name:$myItemName, column_values:$columnVals,create_labels_if_missing:true) { id } }'
-        group = get_group_id(int(os.getenv('PRICES_BOARD_ID')))
+        current_price_tuple = (season_date_from, season_date_to, property_id)
 
-        col_vals = json.dumps({
-        # columns['rentals_united_id']: int(rental_united_id,
-        columns['Property Id']: property_id,
-        columns['Date From']: season_date_from,
-        columns['Date To']: season_date_to,
-        columns['Price']: season_price,
-        columns['Extra']: season_extra
-        })
+        # if condition to avoid inserting duplicates.
+        if current_price_tuple not in all_property_datas:
+            columns = get_board_columns(int(os.getenv('PRICES_BOARD_ID')))
+            query = 'mutation ($myItemName: String!, $columnVals: JSON!,$board_id:Int!,$group_id: String!) { create_item (board_id:$board_id,group_id:$group_id, item_name:$myItemName, column_values:$columnVals,create_labels_if_missing:true) { id } }'
+            group = get_group_id(int(os.getenv('PRICES_BOARD_ID')))
 
-        variables = {
-        'board_id': int(os.getenv('PRICES_BOARD_ID')),
-        'columnVals': col_vals,
-        'group_id': group[0].get('id'),
-        'myItemName': property_name
-        }
-        hit_monday_api(query, variables)
+            col_vals = json.dumps({
+            columns['Property Id']: property_id,
+            columns['Date From']: season_date_from,
+            columns['Date To']: season_date_to,
+            columns['Price']: season_price,
+            columns['Extra']: season_extra
+            })
+
+            variables = {
+            'board_id': int(os.getenv('PRICES_BOARD_ID')),
+            'columnVals': col_vals,
+            'group_id': group[0].get('id'),
+            'myItemName': property_name
+            }
+
+            hit_monday_api(query, variables)
+
     except Exception as e:
         print('error in function reflect_price_changes', e)
 
@@ -276,6 +332,7 @@ def update_amenities(property_id, list_of_amenities_of_property):
 
     Args:
           property_id: The id of the property
+          list_of_amenities_of_property: list of amenities of property
     """
     try:
         if list_of_amenities_of_property is not None:
@@ -311,20 +368,19 @@ def reflect_amenities_change(property_id, rental_amenity_id):
 
         for item in items:
             f_property_id = ''
-            previous_property_ids, amenity_id = get_previous_property_ids(item)
+            previous_property_ids, amenity_id = get_property_and_amenity_ids(item)
+
             if int(rental_amenity_id) == int(amenity_id):
+                print('----------------amenity id matched---------------', amenity_id)
+
                 if previous_property_ids is None or previous_property_ids == '':
                     f_property_id = str(property_id)
-                elif ',' not in previous_property_ids and str(previous_property_ids) == str(property_id):
+                elif (',' not in previous_property_ids and str(previous_property_ids)) == str(property_id) or (',' in previous_property_ids and str(property_id) in str(previous_property_ids)):
                     f_property_id = ''
                 elif (',' in previous_property_ids and str(property_id) not in str(previous_property_ids)) or (',' not in previous_property_ids and str(previous_property_ids) != str(property_id)):
                     f_property_id = str(previous_property_ids)+', '+str(property_id)
-                elif ',' in previous_property_ids and str(property_id) in str(previous_property_ids):
-                    f_property_id = ''
 
                 if f_property_id != '':
-                    print('amenity id matched...............................', amenity_id)
-
                     # assign property_ids in column
                     query = 'mutation ($board_id:Int!,$item_id:Int!,$column_id:String!,$value:String!) {change_simple_column_value (board_id:$board_id,item_id:$item_id,column_id:$column_id,value:$value,create_labels_if_missing:true) { id } }'
 
@@ -340,7 +396,7 @@ def reflect_amenities_change(property_id, rental_amenity_id):
     except Exception as e:
         print('error in function reflect_amenities_change', e)
 
-def get_previous_property_ids(item):
+def get_property_and_amenity_ids(item):
     """
     get previous properties monday.com.
 
@@ -357,103 +413,55 @@ def get_previous_property_ids(item):
         return property_ids, amenity_id
 
     except Exception as e:
+        print('error in function get_property_and_amenity_ids', e)
+
+def get_previous_property_ids():
+    """
+    get previous properties ids from monday.com.
+
+    """
+    try:
+        all_property_ids = []
+
+        items_list = get_all_group_items_of_a_single_board(int(os.getenv('PROPERTIES_BOARD_ID')))
+        properties = items_list[0].get('items')
+        for property in properties:
+                column_values = property.get('column_values')
+                for column in column_values:
+                    if column.get('title') == 'Property ID':
+                        property_id = column.get('text')
+                        all_property_ids.append(property_id)
+        return all_property_ids
+
+    except Exception as e:
         print('error in function get_previous_property_ids', e)
 
-def update_calendar_days(property_id):
+def get_previous_ids_and_dates(board_id, id_col_name):
     """
-    update calendar days on monday.com.
+    get previous board ids, date_from, date_to from monday.com.
 
-    Args:
-          property_id: The id of the property
     """
     try:
-        date_from = '2023-08-31'
-        date_to = '2023-11-01'
+        all_property_data = []
 
-        calendar_data_dict = pull_list_of_calendar_days(property_id, date_from, date_to)
-        pull_list = calendar_data_dict.get('Pull_ListPropertyAvailabilityCalendar_RS')
-        property_calendar = pull_list.get('PropertyCalendar')
-        call_day = property_calendar.get('CalDay')
+        items_list = get_all_group_items_of_a_single_board(board_id)
+        properties = items_list[0].get('items')
+        for property in properties:
+            property_list = []
+            column_values = property.get('column_values')
+            for column in column_values:
+                if column.get('title') == id_col_name:
+                    property_list.append(column.get('text'))
+                if column.get('title') == 'Date From':
+                    property_list.append(column.get('text'))
+                if column.get('title') == 'Date To':
+                    property_list.append(column.get('text'))
+            all_property_data.append(tuple(property_list))
 
-        items_list = get_all_group_items_of_a_single_board(int(os.getenv('CALENDAR_BOARD_ID')))
-        items = items_list[0].get('items')
-
-        if items is None or items == [] or len(items) <= 0:
-            return True
-
-        if type(call_day) != list and (len(call_day) <= 0 or call_day == []):
-            return True
-
-        for item in items:
-            item_id = item.get('id')
-            monday_date, previous_property_ids = get_previous_ids_and_date(item)
-
-            for day in call_day:
-                calendar_day = day.get('@Date')
-                is_blocked = day.get('IsBlocked')
-
-                if is_blocked == "true":
-                    continue
-                if is_blocked == "false" and calendar_day == monday_date:
-                    reflect_changes_in_calendar_board(item_id, property_id, previous_property_ids)
-                    break
+        return all_property_data
 
     except Exception as e:
-        print('error in function update_calendar_days', e)
+        print('error in function get_previous_ids_and_dates from monday', e)
 
 
-def reflect_changes_in_calendar_board(item_id, property_id, previous_property_ids):
-    """
-    update calendar days on monday.com.
-
-    Args:
-        property_id: The id of the property
-    """
-    try:
-        f_property_id=''
-        column_id = 'text'
-
-        if previous_property_ids is None or previous_property_ids == '':
-            f_property_id = str(property_id)
-        elif ',' not in previous_property_ids and str(previous_property_ids) == str(property_id):
-            f_property_id = ''
-        elif (',' in previous_property_ids and str(property_id) not in str(previous_property_ids)) or (',' not in previous_property_ids and str(previous_property_ids) != str(property_id)):
-            f_property_id = str(previous_property_ids)+', '+str(property_id)
-        elif ',' in previous_property_ids and str(property_id) in str(previous_property_ids):
-            f_property_id = ''
-
-        if f_property_id != '':
-            query = 'mutation ($board_id:Int!,$item_id:Int!,$column_id:String!,$value:String!) {change_simple_column_value (board_id:$board_id,item_id:$item_id,column_id:$column_id,value:$value,create_labels_if_missing:true) { id } }'
-
-            variables = {
-            'board_id': int(os.getenv('CALENDAR_BOARD_ID')),
-            'item_id': int(item_id),
-            'column_id': str(column_id),
-            'value': str(f_property_id)
-            }
-
-            hit_monday_api(query, variables)
-
-    except Exception as e:
-        print('error in function reflect_changes_in_calendar_board', e)
-
-def get_previous_ids_and_date(item):
-    """
-    get previous id and date from calender board monday.com.
-
-    Args:
-        property_id: The id of the property
-    """
-    try:
-
-        column_values = item.get('column_values')
-        for column_value in column_values:
-            if column_value.get('title') == 'Date From':
-                monday_date = column_value.get('text')
-            if column_value.get('title') == 'Available Property Id':
-                previous_property_ids = column_value.get('text')
-        return monday_date, previous_property_ids
-
-    except Exception as e:
-        print('error in function get_previous_ids_and_date', e)
 

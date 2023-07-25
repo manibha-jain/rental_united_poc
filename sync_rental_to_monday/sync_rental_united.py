@@ -50,7 +50,7 @@ def pull_list_of_properties_from_ru():
     return data_dicts
 
 def pull_prices_of_property_from_ru(property_id, date_from, date_to):
-    print('property_id...........', property_id)
+    print('-----------property_id-----------', property_id)
 
     xml_payload = f"""
                     <Pull_ListPropertyPrices_RQ>
@@ -102,17 +102,17 @@ def pull_list_of_calendar_days(property_id, date_from, date_to):
     data_dict = xmltodict.parse(response)
     return data_dict
 
-def pull_min_stay_details_from_ru(property_id):
+def pull_availability_calendar_details_from_ru(property_id, date_from, date_to):
     xml_payload = f"""
-                        <Pull_ListPropertyMinStay_RQ>
+                        <Pull_ListPropertyAvailabilityCalendar_RQ>
                             <Authentication>
                                 <UserName>{os.getenv('RU_USERNAME')}</UserName>
                                 <Password>{os.getenv('RU_PASSWORD')}</Password>
                             </Authentication>
                             <PropertyID>{property_id}</PropertyID>
-                            <DateFrom>2023-07-01</DateFrom>
-                            <DateTo>2023-08-30</DateTo>
-                        </Pull_ListPropertyMinStay_RQ>
+                            <DateFrom>{date_from}</DateFrom>
+                            <DateTo>{date_to}</DateTo>
+                        </Pull_ListPropertyAvailabilityCalendar_RQ>
                     """
     # Call the function to make the XML request
     response = make_xml_request(xml_payload)
