@@ -1,5 +1,6 @@
 import xml.etree.ElementTree as ET
 import requests
+import os
 
 
 def make_xml_request(xml_payload):
@@ -23,8 +24,8 @@ def push_to_ru(formatted_string):
     xml_payload_1 = f"""
                     <Push_PutAvbUnits_RQ>
                     <Authentication>
-                        <UserName>sid@theflexliving.com</UserName>
-                        <Password>Rentals2023-</Password>
+                        <UserName>{os.getenv('RU_USERNAME')}</UserName>
+                        <Password>{os.getenv('RU_PASSWORD')}</Password>
                     </Authentication>"""
 
     xml_payload_2 = f"""</Push_PutAvbUnits_RQ>"""

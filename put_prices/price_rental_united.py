@@ -1,5 +1,6 @@
 import requests
 import xml.etree.ElementTree as ET
+import os
 
 def make_xml_request(xml_payload):
     # Replace with the actual URL for sending the XML request
@@ -23,8 +24,8 @@ def push_to_ru(data):
 
     xml_payload = f"""<Push_PutPrices_RQ>
                         <Authentication>
-                            <UserName>sid@theflexliving.com</UserName>
-                            <Password>Rentals2023-</Password>
+                            <UserName>{os.getenv('RU_USERNAME')}</UserName>
+                            <Password>{os.getenv('RU_PASSWORD')}</Password>
                         </Authentication>
                         <Prices PropertyID="{property_data['property_id']}">
                             <Season DateFrom="{property_data['date_from']}" DateTo="{property_data['date_to']}">

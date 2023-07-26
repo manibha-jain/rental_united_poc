@@ -23,24 +23,21 @@ def get_available_units_monday():
             number_of_units = column_values.get('Number of Units', '')
             minimum_stay_length = column_values.get('Minimum stay length', '')
             changeover_type_id = column_values.get('Changeover type ID', '')
-            property_ids = column_values.get('Property IDs', '')
+            property_id = column_values.get('Property IDs', '')
 
             property_data = []
-            if property_ids is not None and property_ids != '':
-                propery_ids_list = [property_id.strip() for property_id in property_ids.split(',')]
-                for property_id in propery_ids_list:
-                    property_data.append({
-                        'date_from': date_from,
-                        'date_to': date_to,
-                        'number_of_units': number_of_units,
-                        'minimum_stay_length': minimum_stay_length,
-                        'changeover_type_id': changeover_type_id,
-                        'property_id': property_id
-                    })
-                all_data.extend(property_data)
+            property_data.append({
+                'date_from': date_from,
+                'date_to': date_to,
+                'number_of_units': number_of_units,
+                'minimum_stay_length': minimum_stay_length,
+                'changeover_type_id': changeover_type_id,
+                'property_id': property_id
+            })
+            all_data.extend(property_data)
 
         except Exception as e:
-            print(e)
+            print('exception inside function get_available_units_monday::::::::::',  e)
 
     unique_property_id_list = []
     formatted_data = {}
@@ -60,6 +57,7 @@ def get_available_units_monday():
         string_head = f"""<MuCalendar PropertyID="{key}">"""
         string_body = ''
         for single_value in value:
+
             string_body += f"""<Date From="{single_value['date_from']}" To="{single_value['date_to']}">
                             <U>{single_value['number_of_units']}</U>
                             <MS>{single_value['minimum_stay_length']}</MS>
