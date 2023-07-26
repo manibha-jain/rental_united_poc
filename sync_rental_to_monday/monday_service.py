@@ -155,3 +155,51 @@ def get_all_group_items_of_a_single_board(property_board_id):
         print(
             f"unable to get_all_group_items_of_a_single_board {response.json()}")
 
+def delete_all_board_data(board_id):
+    """
+    delete all board data from monday.com.
+
+    """
+    try:
+        pass
+        items_list = get_all_group_items_of_a_single_board(board_id)
+        properties_data = items_list[0].get('items')
+        properties_item_ids = [property.get('id') for property in properties_data]
+        for item_id in properties_item_ids:
+            delete_property_query = 'mutation($item_id: Int!) {delete_item (item_id: $item_id) {id}}'
+
+            variables = {
+                'item_id' : int(item_id)
+            }
+            hit_monday_api(delete_property_query,variables)
+
+    except Exception as e:
+        print('error in function delete_all_board_data from monday::::::::', e)
+
+def delete_particular_column_items(board_id, column_id):
+    """
+    delete all items of particular column from monday.com.
+
+    """
+    try:
+        items_list = get_all_group_items_of_a_single_board(board_id)
+        whole_data = items_list[0].get('items')
+
+        for data in whole_data:
+            column_values = data.get('column_values')
+            for column in column_values:
+                if column.get('title') == 'Property Id' and column.get('value') is not None:
+
+                    delete_query = 'mutation ($boardId: Int!, $item_id: Int!, $columnId: String!, $value: String!) {change_simple_column_value(board_id: $boardId,item_id: $item_id,column_id: $columnId, value: $value) {id}}'
+
+                    variables = {
+                        'boardId' : int(board_id),
+                        'columnId' : column_id,
+                        'item_id' : int(data.get('id')),
+                        'value' : ""
+                    }
+                    hit_monday_api(delete_query,variables)
+
+    except Exception as e:
+        print('error in function delete_particular_column_items from monday::::::::::', e)
+

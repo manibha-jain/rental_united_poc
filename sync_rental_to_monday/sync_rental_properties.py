@@ -1,4 +1,4 @@
-from sync_rental_to_monday.monday_service import get_board_columns, get_group_id, hit_monday_api, get_composition_rooms_details,get_all_group_items_of_a_single_board
+from sync_rental_to_monday.monday_service import delete_all_board_data, delete_particular_column_items, get_board_columns, get_group_id, hit_monday_api, get_composition_rooms_details,get_all_group_items_of_a_single_board
 from sync_rental_to_monday.sync_rental_united import pull_availability_calendar_details_from_ru, pull_list_of_properties_from_ru,pull_prices_of_property_from_ru
 import json
 import os
@@ -10,6 +10,19 @@ def sync_rental_to_monday():
     try:
         # get property_details from rental_united
         data_dicts = pull_list_of_properties_from_ru()
+
+        print('Process of deleting data from all boards of monday.com started>>>>>>>>>>')
+        # delete all the data of property board so that updated data can be inserted.
+        delete_all_board_data(int(os.getenv('PROPERTIES_BOARD_ID')))
+        # delete all the data of avb units board so that updated data can be inserted.
+        delete_all_board_data(int(os.getenv('AVB_UNITS_BOARD_ID')))
+        # delete all the data of price board so that updated data can be inserted.
+        delete_all_board_data(int(os.getenv('PRICES_BOARD_ID')))
+        #delete property id column of composition rooms board so that updated data can be inserted.
+        delete_particular_column_items(int(os.getenv('COMP_ROOMS_BOARD_ID')), 'text')
+        #delete property id column of amenities board so that updated data can be inserted.
+        delete_particular_column_items(int(os.getenv('AMENITIES_BOARD_ID')), 'text2')
+        print('Process of deleting data from all boards of monday.com ended>>>>>>>>>>\n')
 
         for data_dict in data_dicts:
 
