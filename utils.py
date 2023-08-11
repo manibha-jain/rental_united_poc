@@ -1,9 +1,10 @@
 
 from graphql import graphql_mutation
 from queries import get_item_query, parse_item_data, items_pagination, paginated_subitems_query, paginated_query, change_item_value, get_item_subitem_query
-from rentals_united import push_to_ru
+from rentals_united import push_to_ru, update_to_ru
 import os
 from dotenv import load_dotenv
+from sync_rental_to_monday.sync_rental_united import pull_list_of_properties_from_ru
 
 
 load_dotenv()
@@ -70,6 +71,29 @@ def update_column_value(column_id, column_value):
     except Exception as e:
         # Handle exceptions and error cases
         print("Error updating column value:", str(e))
+
+
+def get_duplicate_listing(name, duplicate=False):
+    try:
+        rental_property_id = ''
+        rentals_listing_data = pull_list_of_properties_from_ru()
+        if rentals_listing_data is None:
+            raise Exception("error while fetching rentals united data.")
+
+        for rental_listing_data in rentals_listing_data:
+            ru_listing_data = rental_listing_data.get('Pull_ListSpecProp_RS')
+            ru_property_data = ru_listing_data.get('Property')
+            ru_listing_name = ru_property_data.get('Name')
+            if ru_listing_name is not None and ru_listing_name.strip() == name.strip():
+                duplicate = True
+                rental_property_id = rental_listing_data.get('property_id')
+                break
+
+        return duplicate, rental_property_id
+
+    except Exception as e:
+        # Handle exceptions and error cases
+        raise Exception("error in get_duplicate_listing: " + str(e))
 
 
 def get_properties_monday():
@@ -166,16 +190,19 @@ def get_properties_monday():
             })
 
             print(property_data)
-            update_ru_response = push_to_ru(property_data)
-            # if update_ru_response[0]['status_id'] == '0':
-            #     update_monday_record = update_column_value(
-            #         item_id, rentals_united_id_field[0], update_ru_response[0]['preoprty_id'])
-            # print(update_monday_record)
+            duplicate, rental_property_id = get_duplicate_listing(property_data[0].get('name'))
+            if duplicate == False:
+                update_ru_response = push_to_ru(property_data)
+            else:
+                update_ru_response = update_to_ru(property_data, rental_property_id)
+                # if update_ru_response[0]['status_id'] == '0':
+                #     update_monday_record = update_column_value(
+                #         item_id, rentals_united_id_field[0], update_ru_response[0]['preoprty_id'])
+                # print(update_monday_record)
 
             responses_data.append(update_ru_response)
-
         except Exception as e:
-            print(e)
+            raise Exception("error in get_properties_monday: " + str(e))
 
     # Print the list of update_responses
     print(responses_data)

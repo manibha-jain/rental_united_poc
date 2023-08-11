@@ -21,33 +21,39 @@ def make_xml_request(xml_payload):
         return None
 
 def pull_list_of_properties_from_ru():
-    data_dicts = []
+    try:
+        data_dicts = []
 
-    xml_payload = f"""
-                    <Pull_ListOwnerProp_RQ>
-                    <Authentication>
-                    <UserName>{os.getenv('RU_USERNAME')}</UserName>
-                    <Password>{os.getenv('RU_PASSWORD')}</Password>
-                    </Authentication>
-                    <Username>sid@theflexliving.com</Username>
-                    <IncludeNLA>false</IncludeNLA>
-                    </Pull_ListOwnerProp_RQ>
-                """
-    # Call the function to make the XML request
-    response = make_xml_request(xml_payload)
-    data_dict = xmltodict.parse(response)
-    pull_list = data_dict.get('Pull_ListOwnerProp_RS')
-    properties = pull_list.get('Properties')
-    property_list = properties.get('Property')
+        xml_payload = f"""
+                        <Pull_ListOwnerProp_RQ>
+                        <Authentication>
+                        <UserName>{os.getenv('RU_USERNAME')}</UserName>
+                        <Password>{os.getenv('RU_PASSWORD')}</Password>
+                        </Authentication>
+                        <Username>sid@theflexliving.com</Username>
+                        <IncludeNLA>false</IncludeNLA>
+                        </Pull_ListOwnerProp_RQ>
+                    """
+        # Call the function to make the XML request
+        response = make_xml_request(xml_payload)
+        data_dict = xmltodict.parse(response)
+        if 'error' in list(data_dict.keys()):
+            raise Exception("error while fetching rentals united data")
 
-    for property in property_list:
-        ids = property.get('ID')
-        property_id = ids.get('#text')
-        data_dict = get_list_of_property_details(property_id)
-        data_dict['property_id'] = property_id
-        data_dicts.append(data_dict)
+        pull_list = data_dict.get('Pull_ListOwnerProp_RS')
+        properties = pull_list.get('Properties')
+        property_list = properties.get('Property')
 
-    return data_dicts
+        for property in property_list:
+            ids = property.get('ID')
+            property_id = ids.get('#text')
+            data_dict = get_list_of_property_details(property_id)
+            data_dict['property_id'] = property_id
+            data_dicts.append(data_dict)
+
+        return data_dicts
+    except Exception as e:
+        raise Exception("error in pull_list_of_properties_from_ru: " + str(e))
 
 def pull_prices_of_property_from_ru(property_id, date_from, date_to):
     print('property_id...........', property_id)
